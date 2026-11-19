@@ -1,0 +1,106 @@
+name: build-ipa
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download source
+        run: |
+          set -euo pipefail
+          SRC_URL="$(tr -d '\r\n' < src-url.txt)"
+          curl -fL --retry 3 --retry-delay 5 -o src.zip "$SRC_URL"
+          ls -lh src.zip
+          rm -rf QuietSign
+          unzip -q src.zip
+          ls -1
+
+      - name: Show Xcode
+        run: xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate project
+        working-directory: QuietSign
+        run: xcodegen generate
+
+      - name: Build unsigned
+        working-directory: QuietSign
+        run: |
+          set -o pipefail
+          mkdir -p logs
+          xcodebuild \
+            -project QuietSign.xcodeproj \
+            -scheme QuietSign \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ENTITLEMENTS="" \
+            build 2>&1 | tee logs/build.log | tail -n 40
+
+      - name: Package ipa
+        working-directory: QuietSign
+        run: |
+          set -euo pipefail
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/QuietSign.app Payload/
+          zip -qr QuietSign-unsigned.ipa Payload
+          ls -lh QuietSign-unsigned.ipa
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: QuietSign-ipa
+          path: QuietSign/QuietSign-unsigned.ipa
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Publish release
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="build-${{ github.run_number }}"
+          gh release create "$TAG" \
+            QuietSign/QuietSign-unsigned.ipa \
+            --title "QuietSign unsigned IPA $TAG" \
+            --notes "由 GitHub Actions (macos-15) 自动构建的未签名 IPA，可用 Sideloadly / ESign / TrollStore 自签安装。" \
+            --latest
+
+      - name: Report status
+        if: always()
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          {
+            echo "STATUS=${{ job.status }}"
+            echo "TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            if [ -f QuietSign/QuietSign-unsigned.ipa ]; then
+              echo "SIZE=$(du -h QuietSign/QuietSign-unsigned.ipa | cut -f1)"
+              echo "ASSET=https://github.com/${{ github.repository }}/releases/download/build-${{ github.run_number }}/QuietSign-unsigned.ipa"
+            fi
+            echo "---- build log tail ----"
+            tail -n 100 QuietSign/logs/build.log 2>/dev/null || echo "(no build log)"
+          } > build-status.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add build-status.txt
+          git commit -m "chore: build status [skip ci]" || true
+          git pull --rebase || true
+          git push || true
