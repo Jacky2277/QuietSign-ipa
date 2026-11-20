@@ -1,4 +1,20 @@
-run=3
+run=4
 build=skipped
------ errors -----
------ tail -----
+----- setup tail -----
++ python3 -
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+  File "/opt/homebrew/Cellar/python@3.15/3.15.2/Frameworks/Python.framework/Versions/3.15/lib/python3.15/zipfile/__init__.py", line 1901, in extractall
+    self._extract_member(zipinfo, path, pwd)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.15/3.15.2/Frameworks/Python.framework/Versions/3.15/lib/python3.15/zipfile/__init__.py", line 1973, in _extract_member
+    shutil.copyfileobj(source, target)
+    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.15/3.15.2/Frameworks/Python.framework/Versions/3.15/lib/python3.15/shutil.py", line 256, in copyfileobj
+    while buf := fsrc_read(length):
+                 ~~~~~~~~~^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.15/3.15.2/Frameworks/Python.framework/Versions/3.15/lib/python3.15/zipfile/__init__.py", line 1114, in read
+    data = self._read1(n)
+  File "/opt/homebrew/Cellar/python@3.15/3.15.2/Frameworks/Python.framework/Versions/3.15/lib/python3.15/zipfile/__init__.py", line 1197, in _read1
+    data = self._decompressor.decompress(data, n)
+zlib.error: Error -3 while decompressing data: invalid code -- missing end-of-block
